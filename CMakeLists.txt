@@ -28,7 +28,10 @@ FetchContent_MakeAvailable(json)
 #=========================================
 
 # Core library target (contains all your layers)
-add_library(agent_core STATIC src/core/agent_core.cpp)
+add_library(agent_core STATIC
+    src/core/agent_core.cpp
+    src/session/run_manager.cpp
+)
 target_include_directories(agent_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_options(agent_core PRIVATE ${COMPILER_WARNINGS})
 
@@ -60,7 +63,12 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 # Create the test executable
-add_executable(agent_tests tests/unit/test_errors.cpp)
+add_executable(agent_tests
+    tests/unit/test_errors.cpp
+    tests/unit/test_cli_parser.cpp
+    tests/unit/test_run_manager.cpp
+    src/app/cli_parser.cpp
+)
 
 # Link our core library AND the GoogleTest framework
 target_link_libraries(agent_tests PRIVATE

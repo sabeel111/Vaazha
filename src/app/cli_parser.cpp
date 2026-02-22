@@ -1,6 +1,8 @@
 #include "cli_parser.hpp"
-#include <vector>
 #include <charconv>
+#include <optional>
+#include <system_error>
+#include <vector>
 
 namespace agent::app::cli {
 
@@ -71,8 +73,10 @@ namespace agent::app::cli {
         // Exception-free integer parsing
         if (raw.max_steps) {
             uint32_t steps = 0;
-            auto [ptr, ec] = std::from_chars(raw.max_steps->data(), raw.max_steps->data() + raw.max_steps->size(), steps);
-            if (ec != std::errc()) {
+            const char* begin = raw.max_steps->data();
+            const char* end = raw.max_steps->data() + raw.max_steps->size();
+            auto [ptr, ec] = std::from_chars(begin, end, steps);
+            if (ec != std::errc() || ptr != end) {
                 return AgentError{ErrorCategory::Input, "Invalid number for --max-steps", "invalid_integer", "Provide a positive integer."};
             }
             if (steps == 0 || steps > 1000) {
@@ -84,10 +88,22 @@ namespace agent::app::cli {
         // Path validation
         if (raw.cwd) {
             std::filesystem::path p(raw.cwd.value());
-            if (!std::filesystem::exists(p) || !std::filesystem::is_directory(p)) {
+            std::error_code path_ec;
+            const bool exists = std::filesystem::exists(p, path_ec);
+            if (path_ec || !exists) {
                 return AgentError{ErrorCategory::Input, "Working directory does not exist or is not a directory", "invalid_path"};
             }
-            req.working_directory = std::filesystem::canonical(p);
+
+            const bool is_dir = std::filesystem::is_directory(p, path_ec);
+            if (path_ec || !is_dir) {
+                return AgentError{ErrorCategory::Input, "Working directory does not exist or is not a directory", "invalid_path"};
+            }
+
+            std::filesystem::path canonical_path = std::filesystem::canonical(p, path_ec);
+            if (path_ec) {
+                return AgentError{ErrorCategory::Input, "Failed to canonicalize working directory", "invalid_path"};
+            }
+            req.working_directory = std::move(canonical_path);
         }
 
         return req;
