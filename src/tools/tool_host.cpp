@@ -5,26 +5,13 @@
 #include <sstream>
 #include <system_error>
 #include <vector>
+#include "policy/policy_guard.hpp"
 
 namespace agent::tools {
 
-using core::errors::AgentError;
-using core::errors::ErrorCategory;
 using protocol::ToolResult;
 
 namespace {
-
-bool is_within_root(const std::filesystem::path& root,
-                    const std::filesystem::path& child) {
-    auto root_it = root.begin();
-    auto child_it = child.begin();
-    for (; root_it != root.end() && child_it != child.end(); ++root_it, ++child_it) {
-        if (*root_it != *child_it) {
-            return false;
-        }
-    }
-    return root_it == root.end();
-}
 
 bool is_probably_binary(const std::filesystem::path& path) {
     std::ifstream in(path, std::ios::binary);
@@ -54,47 +41,12 @@ std::string trim_line(const std::string& line) {
 
 }  // namespace
 
-core::errors::Result<std::filesystem::path> ToolHost::resolve_within_root(
-    const std::filesystem::path& workspace_root,
-    const std::filesystem::path& target) {
-    std::error_code ec;
-    const std::filesystem::path canonical_root =
-        std::filesystem::weakly_canonical(workspace_root, ec);
-    if (ec) {
-        return AgentError{ErrorCategory::Input,
-                          "Unable to resolve workspace root: " +
-                              workspace_root.string(),
-                          "invalid_workspace_root"};
-    }
-
-    std::filesystem::path candidate = target;
-    if (candidate.is_relative()) {
-        candidate = canonical_root / candidate;
-    }
-
-    const std::filesystem::path canonical_candidate =
-        std::filesystem::weakly_canonical(candidate, ec);
-    if (ec) {
-        return AgentError{ErrorCategory::Input,
-                          "Unable to resolve target path: " + target.string(),
-                          "invalid_path"};
-    }
-
-    if (!is_within_root(canonical_root, canonical_candidate)) {
-        return AgentError{ErrorCategory::Policy,
-                          "Path escapes workspace root: " +
-                              canonical_candidate.string(),
-                          "path_outside_workspace"};
-    }
-
-    return canonical_candidate;
-}
-
 core::errors::Result<ToolResult> ToolHost::read_file(
     const std::filesystem::path& workspace_root,
     const std::filesystem::path& path) const {
     const auto started = std::chrono::steady_clock::now();
-    auto resolved = resolve_within_root(workspace_root, path);
+    const policy::PolicyGuard policy_guard;
+    auto resolved = policy_guard.validate_path_in_workspace(workspace_root, path);
     if (core::errors::is_error(resolved)) {
         return core::errors::get_error(resolved);
     }
@@ -138,16 +90,22 @@ core::errors::Result<ToolResult> ToolHost::search(
     const std::filesystem::path& workspace_root,
     const SearchRequest& request) const {
     if (request.pattern.empty()) {
-        return AgentError{ErrorCategory::Input, "Search pattern cannot be empty.",
-                          "empty_search_pattern"};
+        return core::errors::AgentError{
+            core::errors::ErrorCategory::Input,
+            "Search pattern cannot be empty.",
+            "empty_search_pattern"};
     }
     if (request.max_matches == 0) {
-        return AgentError{ErrorCategory::Input, "max_matches must be greater than zero.",
-                          "invalid_search_limit"};
+        return core::errors::AgentError{
+            core::errors::ErrorCategory::Input,
+            "max_matches must be greater than zero.",
+            "invalid_search_limit"};
     }
 
     const auto started = std::chrono::steady_clock::now();
-    auto resolved = resolve_within_root(workspace_root, request.scope);
+    const policy::PolicyGuard policy_guard;
+    auto resolved =
+        policy_guard.validate_path_in_workspace(workspace_root, request.scope);
     if (core::errors::is_error(resolved)) {
         return core::errors::get_error(resolved);
     }

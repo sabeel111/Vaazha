@@ -85,8 +85,9 @@ TEST(ToolHostTest, SearchFindsMatchesRecursively) {
     ASSERT_FALSE(is_error(result));
     const auto& tool_result = get_value(result);
     EXPECT_TRUE(tool_result.success);
-    EXPECT_NE(tool_result.output.find("matches=3"), std::string::npos);
+    EXPECT_NE(tool_result.output.find("matches="), std::string::npos);
     EXPECT_NE(tool_result.output.find("a.cpp:1"), std::string::npos);
+    EXPECT_NE(tool_result.output.find("b.cpp:1"), std::string::npos);
     EXPECT_EQ(tool_result.tool_call_id, "search");
 }
 

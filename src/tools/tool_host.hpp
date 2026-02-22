@@ -23,11 +23,6 @@ public:
     core::errors::Result<protocol::ToolResult> search(
         const std::filesystem::path& workspace_root,
         const SearchRequest& request) const;
-
-private:
-    static core::errors::Result<std::filesystem::path> resolve_within_root(
-        const std::filesystem::path& workspace_root,
-        const std::filesystem::path& target);
 };
 
 }  // namespace agent::tools
