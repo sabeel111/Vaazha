@@ -1,0 +1,28 @@
+---
+# We base our style on Google's C++ standards, with a few modern tweaks
+BasedOnStyle: Google
+
+# Enforce C++20 features
+Standard: c++20
+
+# Indentation and Spacing
+IndentWidth: 4
+ColumnLimit: 100
+TabWidth: 4
+UseTab: Never
+
+# Pointer and Reference alignment (e.g., std::string* name)
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+# Namespace formatting (don't indent inside namespaces)
+NamespaceIndentation: None
+
+# Sorting Includes automatically
+SortIncludes: CaseSensitive
+
+# Keep short blocks on a single line if possible
+AllowShortBlocksOnASingleLine: Always
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+---
