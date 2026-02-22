@@ -15,9 +15,11 @@ namespace agent::core::errors {
 
     // The standardized error payload
     struct AgentError {
-        ErrorCategory category;
-        std::string message;
-    };
+            ErrorCategory category;
+            std::string message;
+            std::string code = "unknown_error"; // Default value so we don't break old tests
+            std::string hint = "";              // Helpful tips for the user
+        };
 
     // 2. Define the Propagation Strategy (Result Object)
     // A Result will hold either a successful value of type T, OR an AgentError.

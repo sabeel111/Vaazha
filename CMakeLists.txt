@@ -36,7 +36,10 @@ target_compile_options(agent_core PRIVATE ${COMPILER_WARNINGS})
 target_link_libraries(agent_core PUBLIC nlohmann_json::nlohmann_json)
 
 # CLI Executable (Interface Layer)
-add_executable(agent_cli src/app/main.cpp)
+add_executable(agent_cli
+    src/app/main.cpp
+    src/app/cli_parser.cpp
+)
 target_link_libraries(agent_cli PRIVATE agent_core)
 target_compile_options(agent_cli PRIVATE ${COMPILER_WARNINGS})
 
