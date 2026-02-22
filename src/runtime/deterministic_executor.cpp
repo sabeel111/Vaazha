@@ -1,8 +1,7 @@
 #include "runtime/deterministic_executor.hpp"
 
-#include <filesystem>
-#include <fstream>
-#include <sstream>
+#include <cctype>
+#include "tools/tool_host.hpp"
 
 namespace agent::runtime {
 
@@ -13,26 +12,41 @@ using protocol::RunResult;
 using protocol::RunStatus;
 using protocol::RunStep;
 using protocol::RunStepType;
+using tools::SearchRequest;
+using tools::ToolHost;
 
 namespace {
 
-std::string read_file_contents(const std::filesystem::path& path,
-                               std::error_code& ec) {
-    std::ifstream stream(path);
-    if (!stream.is_open()) {
-        ec = std::make_error_code(std::errc::no_such_file_or_directory);
-        return {};
+std::string pick_search_pattern(const std::string& task) {
+    std::string token;
+    std::string fallback;
+    for (const char c : task) {
+        if (std::isalnum(static_cast<unsigned char>(c)) != 0) {
+            token.push_back(c);
+            continue;
+        }
+        if (!token.empty()) {
+            if (fallback.empty()) {
+                fallback = token;
+            }
+            if (token.size() >= 4) {
+                return token;
+            }
+            token.clear();
+        }
     }
-
-    std::ostringstream buffer;
-    buffer << stream.rdbuf();
-    if (!stream.good() && !stream.eof()) {
-        ec = std::make_error_code(std::errc::io_error);
-        return {};
+    if (!token.empty()) {
+        if (fallback.empty()) {
+            fallback = token;
+        }
+        if (token.size() >= 4) {
+            return token;
+        }
     }
-
-    ec.clear();
-    return buffer.str();
+    if (!fallback.empty()) {
+        return fallback;
+    }
+    return "TODO";
 }
 
 }  // namespace
@@ -55,32 +69,41 @@ core::errors::Result<RunResult> DeterministicExecutor::execute(
     context_step.type = RunStepType::LoadContext;
     context_step.success = true;
 
+    ToolHost tool_host;
     std::string context_payload;
     if (request.plan_file.has_value()) {
-        std::filesystem::path plan_path = request.plan_file.value();
-        if (plan_path.is_relative()) {
-            plan_path = request.working_directory / plan_path;
+        auto read_result =
+            tool_host.read_file(request.working_directory, request.plan_file.value());
+        if (core::errors::is_error(read_result)) {
+            return core::errors::get_error(read_result);
         }
-
-        std::error_code ec;
-        plan_path = std::filesystem::weakly_canonical(plan_path, ec);
-        if (ec) {
+        const auto& tool_result = core::errors::get_value(read_result);
+        if (!tool_result.success) {
             return AgentError{ErrorCategory::Execution,
-                              "Unable to resolve plan file path: " + plan_path.string(),
-                              "plan_file_resolve_failed"};
-        }
-
-        std::string file_contents = read_file_contents(plan_path, ec);
-        if (ec) {
-            return AgentError{ErrorCategory::Execution,
-                              "Failed to read plan file: " + plan_path.string(),
+                              "Failed to read plan file: " + tool_result.error_message,
                               "plan_file_read_failed"};
         }
-
-        context_payload = "Loaded plan file (" + std::to_string(file_contents.size()) +
-                          " bytes) from " + plan_path.string();
+        context_payload = "Loaded plan file (" +
+                          std::to_string(tool_result.output.size()) + " bytes)";
     } else if (request.task_description.has_value()) {
-        context_payload = "Task: " + request.task_description.value();
+        SearchRequest search_request;
+        search_request.pattern = pick_search_pattern(request.task_description.value());
+        search_request.scope = ".";
+        search_request.max_matches = 12;
+
+        auto search_result = tool_host.search(request.working_directory, search_request);
+        if (core::errors::is_error(search_result)) {
+            return core::errors::get_error(search_result);
+        }
+        const auto& tool_result = core::errors::get_value(search_result);
+        if (!tool_result.success) {
+            return AgentError{ErrorCategory::Execution,
+                              "Search failed: " + tool_result.error_message,
+                              "search_failed"};
+        }
+
+        context_payload = "Task: " + request.task_description.value() + "\n" +
+                          tool_result.output;
     } else {
         return AgentError{ErrorCategory::Input,
                           "Request has neither task nor plan file.",

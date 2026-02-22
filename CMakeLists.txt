@@ -32,6 +32,7 @@ add_library(agent_core STATIC
     src/core/agent_core.cpp
     src/runtime/deterministic_executor.cpp
     src/session/run_manager.cpp
+    src/tools/tool_host.cpp
 )
 target_include_directories(agent_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_options(agent_core PRIVATE ${COMPILER_WARNINGS})
@@ -69,6 +70,7 @@ add_executable(agent_tests
     tests/unit/test_errors.cpp
     tests/unit/test_cli_parser.cpp
     tests/unit/test_run_manager.cpp
+    tests/unit/test_tool_host.cpp
     src/app/cli_parser.cpp
 )
 
