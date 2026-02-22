@@ -13,6 +13,8 @@ enum class RunStatus {
 enum class RunStepType {
     InspectRequest,
     LoadContext,
+    ExecuteCommand,
+    ApplyPatch,
     BuildReport
 };
 
@@ -47,6 +49,10 @@ inline std::string to_string(const RunStepType type) {
             return "inspect_request";
         case RunStepType::LoadContext:
             return "load_context";
+        case RunStepType::ExecuteCommand:
+            return "execute_command";
+        case RunStepType::ApplyPatch:
+            return "apply_patch";
         case RunStepType::BuildReport:
             return "build_report";
         default:

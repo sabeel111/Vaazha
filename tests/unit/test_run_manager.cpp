@@ -49,11 +49,35 @@ TEST(RunManagerTest, CancelRunMovesToCancelled) {
     EXPECT_EQ(get_value(state), RunState::Cancelled);
 }
 
+TEST(RunManagerTest, CancelRunSetsCancellationToken) {
+    RunManager manager;
+    auto start = manager.start_run(make_valid_request());
+    ASSERT_FALSE(is_error(start));
+    const std::string run_id = get_value(start);
+
+    auto token_result = manager.get_cancel_token(run_id);
+    ASSERT_FALSE(is_error(token_result));
+    auto token = get_value(token_result);
+    ASSERT_TRUE(token != nullptr);
+    EXPECT_FALSE(token->load());
+
+    auto cancel = manager.cancel_run(run_id);
+    ASSERT_FALSE(is_error(cancel));
+    EXPECT_TRUE(token->load());
+}
+
 TEST(RunManagerTest, CancelRunFailsForUnknownId) {
     RunManager manager;
     auto cancel = manager.cancel_run("run-does-not-exist");
     ASSERT_TRUE(is_error(cancel));
     EXPECT_EQ(get_error(cancel).code, "run_not_found");
+}
+
+TEST(RunManagerTest, GetCancelTokenFailsForUnknownRun) {
+    RunManager manager;
+    auto token = manager.get_cancel_token("run-does-not-exist");
+    ASSERT_TRUE(is_error(token));
+    EXPECT_EQ(get_error(token).code, "run_not_found");
 }
 
 TEST(RunManagerTest, CancelRunFailsAfterCompletion) {

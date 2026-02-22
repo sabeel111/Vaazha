@@ -1,3 +1,4 @@
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -118,6 +119,108 @@ TEST(ToolHostTest, SearchRejectsEmptyPattern) {
     auto result = host.search(workspace.root(), request);
     ASSERT_TRUE(is_error(result));
     EXPECT_EQ(get_error(result).code, "empty_search_pattern");
+}
+
+TEST(ToolHostTest, RunCommandExecutesSuccessfully) {
+    TempWorkspace workspace;
+    ToolHost host;
+
+    agent::tools::CommandRequest request;
+    request.command = "printf 'hello'";
+    request.timeout_ms = 1000;
+    request.working_directory = ".";
+
+    auto result = host.run_command(workspace.root(), request);
+    ASSERT_FALSE(is_error(result));
+    const auto& tool_result = get_value(result);
+    EXPECT_TRUE(tool_result.success);
+    EXPECT_EQ(tool_result.tool_call_id, "run_command");
+    EXPECT_EQ(tool_result.output, "hello");
+}
+
+TEST(ToolHostTest, RunCommandRejectsBlockedOperation) {
+    TempWorkspace workspace;
+    ToolHost host;
+
+    agent::tools::CommandRequest request;
+    request.command = "sudo ls";
+    request.timeout_ms = 1000;
+
+    auto result = host.run_command(workspace.root(), request);
+    ASSERT_TRUE(is_error(result));
+    EXPECT_EQ(get_error(result).code, "blocked_command");
+}
+
+TEST(ToolHostTest, RunCommandTimesOut) {
+    TempWorkspace workspace;
+    ToolHost host;
+
+    agent::tools::CommandRequest request;
+    request.command = "sleep 1";
+    request.timeout_ms = 30;
+
+    auto result = host.run_command(workspace.root(), request);
+    ASSERT_FALSE(is_error(result));
+    const auto& tool_result = get_value(result);
+    EXPECT_FALSE(tool_result.success);
+    EXPECT_NE(tool_result.error_message.find("timed out"), std::string::npos);
+}
+
+TEST(ToolHostTest, RunCommandHonorsCancellationToken) {
+    TempWorkspace workspace;
+    ToolHost host;
+
+    auto token = std::make_shared<std::atomic_bool>(true);
+    agent::tools::CommandRequest request;
+    request.command = "sleep 1";
+    request.timeout_ms = 1000;
+    request.cancel_token = token;
+
+    auto result = host.run_command(workspace.root(), request);
+    ASSERT_FALSE(is_error(result));
+    const auto& tool_result = get_value(result);
+    EXPECT_FALSE(tool_result.success);
+    EXPECT_NE(tool_result.error_message.find("cancelled"), std::string::npos);
+}
+
+TEST(ToolHostTest, ApplyPatchUpdatesFile) {
+    TempWorkspace workspace;
+    const auto target = workspace.root() / "file.txt";
+    write_file(target, "old\n");
+
+    ToolHost host;
+    agent::tools::PatchRequest request;
+    request.patch_text =
+        "diff --git a/file.txt b/file.txt\n"
+        "--- a/file.txt\n"
+        "+++ b/file.txt\n"
+        "@@ -1 +1 @@\n"
+        "-old\n"
+        "+new\n";
+    request.timeout_ms = 1000;
+
+    auto result = host.apply_patch(workspace.root(), request);
+    ASSERT_FALSE(is_error(result));
+    const auto& tool_result = get_value(result);
+    EXPECT_TRUE(tool_result.success);
+    EXPECT_EQ(tool_result.tool_call_id, "apply_patch");
+
+    std::ifstream in(target);
+    std::string content;
+    std::getline(in, content);
+    EXPECT_EQ(content, "new");
+}
+
+TEST(ToolHostTest, ApplyPatchRejectsInvalidFormat) {
+    TempWorkspace workspace;
+    ToolHost host;
+
+    agent::tools::PatchRequest request;
+    request.patch_text = "this is not a patch";
+
+    auto result = host.apply_patch(workspace.root(), request);
+    ASSERT_TRUE(is_error(result));
+    EXPECT_EQ(get_error(result).code, "invalid_patch_format");
 }
 
 }  // namespace

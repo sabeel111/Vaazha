@@ -1,4 +1,7 @@
 #include "session/run_manager.hpp"
+
+#include <atomic>
+#include <memory>
 #include <utility>
 #include "core/config/run_id.hpp"
 #include "core/logging/logger.hpp"
@@ -58,6 +61,7 @@ core::errors::Result<std::string> RunManager::start_run(
         record.run_id = run_id;
         record.request = request;
         record.state = RunState::Created;
+        record.cancel_token = std::make_shared<std::atomic_bool>(false);
         runs_.emplace(run_id, std::move(record));
         LOG_INFO("RunManager: run " + run_id + " transition created -> running");
         runs_[run_id].state = RunState::Running;
@@ -70,7 +74,46 @@ core::errors::Result<std::string> RunManager::start_run(
 }
 
 core::errors::Result<RunState> RunManager::cancel_run(const std::string& run_id) {
-    return transition_to_terminal(run_id, RunState::Cancelled, std::nullopt);
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = runs_.find(run_id);
+    if (it == runs_.end()) {
+        return AgentError{ErrorCategory::Input, "Run ID not found: " + run_id,
+                          "run_not_found"};
+    }
+
+    if (it->second.cancel_token) {
+        it->second.cancel_token->store(true);
+    }
+
+    if (is_terminal(it->second.state)) {
+        return AgentError{ErrorCategory::Input,
+                          "Run is already terminal: " +
+                              to_string(it->second.state),
+                          "invalid_state_transition"};
+    }
+
+    const std::string prev = to_string(it->second.state);
+    it->second.state = RunState::Cancelled;
+    it->second.failure_reason = "cancelled";
+    LOG_INFO("RunManager: run " + run_id + " transition " + prev + " -> " +
+             to_string(RunState::Cancelled));
+    return it->second.state;
+}
+
+core::errors::Result<std::shared_ptr<std::atomic_bool>> RunManager::get_cancel_token(
+    const std::string& run_id) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = runs_.find(run_id);
+    if (it == runs_.end()) {
+        return AgentError{ErrorCategory::Input, "Run ID not found: " + run_id,
+                          "run_not_found"};
+    }
+    if (!it->second.cancel_token) {
+        return AgentError{ErrorCategory::Internal,
+                          "Run does not have a cancellation token.",
+                          "cancel_token_missing"};
+    }
+    return it->second.cancel_token;
 }
 
 core::errors::Result<RunState> RunManager::mark_completed(

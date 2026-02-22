@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstddef>
+#include <atomic>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -23,6 +25,7 @@ struct RunRecord {
     protocol::RunRequest request;
     RunState state = RunState::Created;
     std::optional<std::string> failure_reason;
+    std::shared_ptr<std::atomic_bool> cancel_token;
 };
 
 class RunManager {
@@ -30,6 +33,8 @@ public:
     core::errors::Result<std::string> start_run(const protocol::RunRequest& request);
     core::errors::Result<RunState> cancel_run(const std::string& run_id);
     core::errors::Result<RunState> get_run_state(const std::string& run_id) const;
+    core::errors::Result<std::shared_ptr<std::atomic_bool>> get_cancel_token(
+        const std::string& run_id) const;
 
     // Helpers for deterministic pipeline wiring in upcoming phase tasks.
     core::errors::Result<RunState> mark_completed(const std::string& run_id);

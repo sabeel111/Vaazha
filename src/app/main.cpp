@@ -42,6 +42,15 @@ int main(int argc, char* argv[]) {
     agent::core::logging::Logger::get().set_run_id(run_id);
     LOG_INFO("Run started: " + run_id);
 
+    auto cancel_token_result = run_manager.get_cancel_token(run_id);
+    if (agent::core::errors::is_error(cancel_token_result)) {
+        const auto& err = agent::core::errors::get_error(cancel_token_result);
+        LOG_ERROR("Failed to get cancellation token [" + err.code + "]: " +
+                  err.message);
+        return 3;
+    }
+    auto cancel_token = agent::core::errors::get_value(cancel_token_result);
+
     agent::session::ArtifactWriter artifact_writer(req.working_directory);
     std::filesystem::path artifact_path;
     auto request_artifact = artifact_writer.write_request(run_id, req);
@@ -54,7 +63,7 @@ int main(int argc, char* argv[]) {
     artifact_path = agent::core::errors::get_value(request_artifact);
 
     agent::runtime::DeterministicExecutor executor;
-    auto execution = executor.execute(run_id, req);
+    auto execution = executor.execute(run_id, req, cancel_token);
     if (agent::core::errors::is_error(execution)) {
         const auto& err = agent::core::errors::get_error(execution);
         LOG_ERROR("Execution failed [" + err.code + "]: " + err.message);

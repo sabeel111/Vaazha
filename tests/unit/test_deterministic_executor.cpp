@@ -30,7 +30,7 @@ TEST(DeterministicExecutorTest, ExecutesTaskRequest) {
     const auto& run_result = get_value(result);
     EXPECT_EQ(run_result.run_id, "run-test-1");
     EXPECT_EQ(run_result.status, RunStatus::Completed);
-    EXPECT_EQ(run_result.steps.size(), 3u);
+    EXPECT_EQ(run_result.steps.size(), 4u);
     EXPECT_FALSE(run_result.summary.empty());
 }
 
@@ -50,7 +50,7 @@ TEST(DeterministicExecutorTest, ExecutesPlanFileRequest) {
     ASSERT_FALSE(is_error(result));
 
     const auto& run_result = get_value(result);
-    EXPECT_EQ(run_result.steps.size(), 3u);
+    EXPECT_EQ(run_result.steps.size(), 4u);
     EXPECT_NE(run_result.steps[1].output.find("Loaded plan file"), std::string::npos);
 
     std::error_code ec;
@@ -66,6 +66,44 @@ TEST(DeterministicExecutorTest, FailsWhenPlanFileMissing) {
     auto result = executor.execute("run-test-3", req);
     ASSERT_TRUE(is_error(result));
     EXPECT_EQ(get_error(result).code, "plan_file_read_failed");
+}
+
+TEST(DeterministicExecutorTest, AppliesPatchWhenPlanContainsDiff) {
+    const auto temp_file = std::filesystem::current_path() / "patch-target-step8.txt";
+    {
+        std::ofstream out(temp_file);
+        out << "old\n";
+    }
+
+    const auto patch_file = std::filesystem::current_path() / "test-plan-step8.patch";
+    {
+        std::ofstream out(patch_file);
+        out << "diff --git a/patch-target-step8.txt b/patch-target-step8.txt\n";
+        out << "--- a/patch-target-step8.txt\n";
+        out << "+++ b/patch-target-step8.txt\n";
+        out << "@@ -1 +1 @@\n";
+        out << "-old\n";
+        out << "+new\n";
+    }
+
+    RunRequest req;
+    req.plan_file = patch_file.filename();
+    req.working_directory = std::filesystem::current_path();
+
+    DeterministicExecutor executor;
+    auto result = executor.execute("run-test-4", req);
+    ASSERT_FALSE(is_error(result));
+    const auto& run_result = get_value(result);
+    EXPECT_EQ(run_result.steps.size(), 5u);
+
+    std::ifstream in(temp_file);
+    std::string content;
+    std::getline(in, content);
+    EXPECT_EQ(content, "new");
+
+    std::error_code ec;
+    std::filesystem::remove(temp_file, ec);
+    std::filesystem::remove(patch_file, ec);
 }
 
 }  // namespace
