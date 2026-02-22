@@ -42,6 +42,7 @@ agent_tests
 # Dependency directories
 _deps/
 .cache/
+.agent_runs/
 
 # Testing artifacts
 Testing/

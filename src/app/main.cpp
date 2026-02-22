@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include "app/cli_parser.hpp"
@@ -6,6 +7,7 @@
 #include "core/logging/logger.hpp"
 #include "protocol/run_execution_contract.hpp"
 #include "runtime/deterministic_executor.hpp"
+#include "session/artifact_writer.hpp"
 #include "session/run_manager.hpp"
 
 int main(int argc, char* argv[]) {
@@ -40,11 +42,34 @@ int main(int argc, char* argv[]) {
     agent::core::logging::Logger::get().set_run_id(run_id);
     LOG_INFO("Run started: " + run_id);
 
+    agent::session::ArtifactWriter artifact_writer(req.working_directory);
+    std::filesystem::path artifact_path;
+    auto request_artifact = artifact_writer.write_request(run_id, req);
+    if (agent::core::errors::is_error(request_artifact)) {
+        const auto& err = agent::core::errors::get_error(request_artifact);
+        LOG_ERROR("Failed to write request artifact [" + err.code + "]: " +
+                  err.message);
+        return 6;
+    }
+    artifact_path = agent::core::errors::get_value(request_artifact);
+
     agent::runtime::DeterministicExecutor executor;
     auto execution = executor.execute(run_id, req);
     if (agent::core::errors::is_error(execution)) {
         const auto& err = agent::core::errors::get_error(execution);
         LOG_ERROR("Execution failed [" + err.code + "]: " + err.message);
+        auto failure_artifact = artifact_writer.write_final(
+            run_id, agent::protocol::RunStatus::Failed, "Execution failed.",
+            err.message);
+        if (agent::core::errors::is_error(failure_artifact)) {
+            const auto& artifact_err =
+                agent::core::errors::get_error(failure_artifact);
+            LOG_ERROR("Failed to write failure artifact [" + artifact_err.code +
+                      "]: " + artifact_err.message);
+        } else {
+            artifact_path = agent::core::errors::get_value(failure_artifact);
+        }
+
         auto failed = run_manager.mark_failed(run_id, err.message);
         if (agent::core::errors::is_error(failed)) {
             const auto& fail_err = agent::core::errors::get_error(failed);
@@ -59,6 +84,14 @@ int main(int argc, char* argv[]) {
         LOG_INFO("Step " + step.id + " (" + agent::protocol::to_string(step.type) +
                  "): " + (step.success ? "ok" : "failed"));
         LOG_INFO("  output: " + step.output);
+        auto step_artifact = artifact_writer.write_step(run_id, step);
+        if (agent::core::errors::is_error(step_artifact)) {
+            const auto& err = agent::core::errors::get_error(step_artifact);
+            LOG_ERROR("Failed to write step artifact [" + err.code + "]: " +
+                      err.message);
+            return 6;
+        }
+        artifact_path = agent::core::errors::get_value(step_artifact);
     }
     LOG_INFO("Run summary: " + result.summary);
 
@@ -99,6 +132,17 @@ int main(int argc, char* argv[]) {
     }
 
     LOG_INFO("Final run state: " + state_text);
+
+    auto final_artifact = artifact_writer.write_final(
+        run_id, agent::protocol::RunStatus::Completed, result.summary);
+    if (agent::core::errors::is_error(final_artifact)) {
+        const auto& err = agent::core::errors::get_error(final_artifact);
+        LOG_ERROR("Failed to write final artifact [" + err.code + "]: " +
+                  err.message);
+        return 6;
+    }
+    artifact_path = agent::core::errors::get_value(final_artifact);
+    LOG_INFO("Artifacts: " + artifact_path.string());
 
     return 0;
 }

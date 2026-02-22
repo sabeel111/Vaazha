@@ -32,6 +32,7 @@ add_library(agent_core STATIC
     src/core/agent_core.cpp
     src/policy/policy_guard.cpp
     src/runtime/deterministic_executor.cpp
+    src/session/artifact_writer.cpp
     src/session/run_manager.cpp
     src/tools/tool_host.cpp
 )
@@ -67,6 +68,7 @@ FetchContent_MakeAvailable(googletest)
 
 # Create the test executable
 add_executable(agent_tests
+    tests/unit/test_artifact_writer.cpp
     tests/unit/test_deterministic_executor.cpp
     tests/unit/test_errors.cpp
     tests/unit/test_cli_parser.cpp
