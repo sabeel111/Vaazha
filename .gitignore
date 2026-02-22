@@ -1,1 +1,92 @@
+# Build directories
 build/
+cmake-build-*/
+out/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Compiled Object files
+*.o
+*.obj
+*.ko
+*.elf
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.a
+*.lib
+*.la
+*.lo
+
+# Executables
+*.exe
+*.out
+*.app
+agent_cli
+agent_tests
+
+# Dependency directories
+_deps/
+.cache/
+
+# Testing artifacts
+Testing/
+CTestTestfile.cmake
+DartConfiguration.tcl
+
+# Editor / IDE files
+.vscode/
+.idea/
+.vs/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# OS-specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.directory
+
+# Environment files
+.env
+.env.local
+*.env.*
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Coverage reports
+coverage/
+*.gcda
+*.gcno
+*.lcov
+
+# Backup files
+*.bak
+*.backup
+*~
